@@ -21,7 +21,15 @@ def parse(html):
     return None
 
 def rows(label, url):
-    lst = parse(fetch(url))
+    lst = None
+    for attempt in range(3):
+        try:
+            lst = parse(fetch(url))
+        except Exception:
+            lst = None
+        if lst and lst["page"]["products"]:
+            break
+        time.sleep(3 * (attempt + 1))
     if not lst:
         return []
     pg = lst["page"]
@@ -41,17 +49,19 @@ def rows(label, url):
     return out
 
 if __name__ == "__main__":
-    out_path, *terms = sys.argv[1:]
+    out_path, pages, *terms = sys.argv[1:]
+    pages = int(pages)
+    if terms and terms[0].startswith('@'):
+        terms = [l.strip() for l in open(terms[0][1:], encoding='utf8') if l.strip()]
     allr = []
     for t in terms:
-        url = "https://prom.ua/ua/search?" + urllib.parse.urlencode({"search_term": t})
-        try:
-            r = rows(t, url)
-        except Exception as e:
-            print("ERR", t, e); r = []
+        r = []
+        for pg in range(1, pages + 1):
+            url = "https://prom.ua/ua/search?" + urllib.parse.urlencode({"search_term": t, "page": pg})
+            r += rows(t, url)
+            time.sleep(2)
         print(f"{t}: {len(r)} товарів, total={r[0]['total_in_listing'] if r else '-'}")
         allr += r
-        time.sleep(2)
     if allr:
         with open(out_path, "w", newline="", encoding="utf8") as f:
             w = csv.DictWriter(f, fieldnames=list(allr[0])); w.writeheader(); w.writerows(allr)
